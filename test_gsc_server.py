@@ -935,6 +935,69 @@ class TestSafetyGuards(unittest.IsolatedAsyncioTestCase):
 
 
 # ---------------------------------------------------------------------------
+# TestReadOnlyMode
+# ---------------------------------------------------------------------------
+
+class TestReadOnlyMode(unittest.IsolatedAsyncioTestCase):
+
+    async def _tool_names(self, mod):
+        return {t.name for t in await mod.mcp.list_tools()}
+
+    def test_readonly_uses_readonly_scope(self):
+        mod = _load_module({"GSC_READONLY": "true"})
+        self.assertEqual(mod.SCOPES, ["https://www.googleapis.com/auth/webmasters.readonly"])
+
+    def test_default_uses_full_scope(self):
+        mod = _load_module({"GSC_READONLY": "false"})
+        self.assertEqual(mod.SCOPES, ["https://www.googleapis.com/auth/webmasters"])
+
+    async def test_readonly_unregisters_write_tools(self):
+        mod = _load_module({"GSC_READONLY": "true", "GSC_ALLOW_DESTRUCTIVE": "true"})
+        names = await self._tool_names(mod)
+        self.assertTrue(names.isdisjoint(mod.WRITE_TOOLS))
+        self.assertIn("get_search_analytics", names)
+
+    async def test_default_keeps_write_tools(self):
+        mod = _load_module({"GSC_READONLY": "false"})
+        self.assertTrue(set(mod.WRITE_TOOLS) <= await self._tool_names(mod))
+
+    async def test_readonly_manage_sitemaps_refuses_submit(self):
+        mod = _load_module({"GSC_READONLY": "true"})
+        service = _make_service()
+        with patch("gsc_server.get_gsc_service", return_value=service):
+            result = await mod.manage_sitemaps("https://example.com/", "submit", "https://example.com/sitemap.xml")
+        self.assertIn("Invalid action", result)
+        service.sitemaps().submit.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TestAdcAuth
+# ---------------------------------------------------------------------------
+
+class TestAdcAuth(unittest.IsolatedAsyncioTestCase):
+
+    def test_invalid_auth_mode_raises(self):
+        with self.assertRaises(ValueError):
+            _load_module({"GSC_AUTH": "bogus"})
+
+    def test_adc_uses_google_auth_default_with_scopes(self):
+        mod = _load_module({"GSC_AUTH": "adc", "GSC_READONLY": "true"})
+        creds = MagicMock()
+        with patch("gsc_server.google.auth.default", return_value=(creds, "proj")) as default, \
+             patch("gsc_server.build") as build, \
+             patch("gsc_server.service_account.Credentials.from_service_account_file") as sa:
+            mod.get_gsc_service()
+        default.assert_called_once_with(scopes=["https://www.googleapis.com/auth/webmasters.readonly"])
+        build.assert_called_once_with("searchconsole", "v1", credentials=creds, cache_discovery=False)
+        sa.assert_not_called()
+
+    async def test_adc_unregisters_reauthenticate(self):
+        mod = _load_module({"GSC_AUTH": "adc"})
+        names = {t.name for t in await mod.mcp.list_tools()}
+        self.assertNotIn("reauthenticate", names)
+
+
+# ---------------------------------------------------------------------------
 # TestReauthenticate
 # ---------------------------------------------------------------------------
 

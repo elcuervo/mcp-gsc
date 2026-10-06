@@ -113,6 +113,28 @@ On first use, a browser window will open asking you to sign in to your Google ac
 5. Save the file somewhere permanent (e.g. `~/Documents/service_account.json`)
 6. Add the service account email to your GSC property: Search Console → Settings → Users and permissions → Add user → Full access
 
+#### Option C — Short-lived, read-only credentials (no key file)
+
+Uses [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) with service account impersonation, so tokens expire after one hour and no JSON key ever exists.
+
+1. Create a service account (steps 1–3 above) but **do not create a key**
+2. Add the service account email to your GSC property with **Restricted** permission
+3. Grant your Google user `roles/iam.serviceAccountTokenCreator` on that service account
+4. Log in:
+   ```bash
+   gcloud auth application-default login \
+     --impersonate-service-account=SERVICE_ACCOUNT_EMAIL
+   ```
+5. Configure the server with `GSC_AUTH=adc` and `GSC_READONLY=true`:
+   ```json
+   "env": {
+     "GSC_AUTH": "adc",
+     "GSC_READONLY": "true"
+   }
+   ```
+
+`GSC_READONLY=true` requests the `webmasters.readonly` scope and removes `add_site`, `delete_site`, `submit_sitemap` and `delete_sitemap`, so Google rejects any write even if the account has more permissions.
+
 #### 🎥 Watch the step-by-step setup tutorial for this section
 
 <div align="center">
@@ -331,6 +353,8 @@ If you see your properties — it's working. If not, ask: **"Call get_capabiliti
 | `GSC_SKIP_OAUTH` | No | `false` | Set to `"true"` to force service account auth and skip OAuth entirely |
 | `GSC_DATA_STATE` | No | `"all"` | `"all"` matches the GSC dashboard. `"final"` returns only confirmed data (2–3 day lag). |
 | `GSC_ALLOW_DESTRUCTIVE` | No | `false` | Set to `"true"` to enable add/delete site and delete sitemap tools |
+| `GSC_AUTH` | No | `"auto"` | `"auto"` tries OAuth then service account key. `"adc"` uses Application Default Credentials only (e.g. gcloud impersonation). |
+| `GSC_READONLY` | No | `false` | Set to `"true"` to use the `webmasters.readonly` scope and remove all write tools (overrides `GSC_ALLOW_DESTRUCTIVE`) |
 
 ---
 

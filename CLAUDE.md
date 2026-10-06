@@ -23,6 +23,8 @@ Two modes, tried in order:
 
 Set `GSC_SKIP_OAUTH=true` to force service account mode and skip OAuth entirely.
 
+Set `GSC_AUTH=adc` to bypass both and use Application Default Credentials only (`get_gsc_service_adc`).
+
 ## Key environment variables
 
 | Variable | Default | Description |
@@ -35,6 +37,8 @@ Set `GSC_SKIP_OAUTH=true` to force service account mode and skip OAuth entirely.
 | `GSC_CREDENTIALS_PATH` | — | Path to service account JSON key file |
 | `GSC_OAUTH_CLIENT_SECRETS_FILE` | `client_secrets.json` | Path to OAuth client secrets file |
 | `GSC_SKIP_OAUTH` | `false` | Set `true` to skip OAuth and use service account only |
+| `GSC_AUTH` | `auto` | `adc` = Application Default Credentials only (short-lived, e.g. gcloud impersonation) |
+| `GSC_READONLY` | `false` | Set `true` to use `webmasters.readonly` scope and unregister write tools (`WRITE_TOOLS`) |
 
 ## Adding a new tool
 

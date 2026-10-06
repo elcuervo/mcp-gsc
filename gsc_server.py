@@ -103,13 +103,42 @@ if _raw_data_state not in ("all", "final"):
     )
 DATA_STATE = _raw_data_state
 
-SCOPES = ["https://www.googleapis.com/auth/webmasters"]
+# Auth mode.
+# "auto" → OAuth first, then service account key file (default)
+# "adc"  → Application Default Credentials only, e.g. short-lived tokens from
+#          `gcloud auth application-default login --impersonate-service-account=...`
+AUTH_MODE = os.environ.get("GSC_AUTH", "auto").lower().strip()
+if AUTH_MODE not in ("auto", "adc"):
+    raise ValueError(
+        f"Invalid GSC_AUTH value '{AUTH_MODE}'. Accepted values are 'auto' (default) or 'adc'."
+    )
+
+# Read-only mode: requests the webmasters.readonly scope and unregisters every tool
+# that can change Search Console state, so writes are refused by Google itself.
+READONLY = os.environ.get("GSC_READONLY", "false").lower() in ("true", "1", "yes")
+
+WRITE_TOOLS = ("add_site", "delete_site", "submit_sitemap", "delete_sitemap")
+
+if READONLY:
+    SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"]
+else:
+    SCOPES = ["https://www.googleapis.com/auth/webmasters"]
+
+
+def get_gsc_service_adc():
+    """Returns a Search Console service object using Application Default Credentials."""
+    creds, _ = google.auth.default(scopes=SCOPES)
+    return build("searchconsole", "v1", credentials=creds, cache_discovery=False)
 
 def get_gsc_service():
     """
     Returns an authorized Search Console service object.
     First tries OAuth authentication, then falls back to service account.
+    With GSC_AUTH=adc, uses Application Default Credentials only.
     """
+    if AUTH_MODE == "adc":
+        return get_gsc_service_adc()
+
     # Fail-fast if credential env vars are set but point to files that don't exist.
     # Without this, a typo'd or uvx-incompatible path would silently fall through to
     # SCRIPT_DIR/cwd fallbacks (which don't work under uvx) and emit a misleading
@@ -262,7 +291,16 @@ async def get_capabilities() -> str:
         get_gsc_service()
         auth_status = "✅ Authenticated — ready to use all tools."
     except Exception as e:
-        auth_status = f"❌ Not authenticated — call the 'reauthenticate' tool first to open a browser login window.\nDetails: {e}"
+        if AUTH_MODE == "adc":
+            auth_status = (
+                "❌ Not authenticated — run `gcloud auth application-default login "
+                "--impersonate-service-account=<service-account-email>` and retry."
+                f"\nDetails: {e}"
+            )
+        else:
+            auth_status = f"❌ Not authenticated — call the 'reauthenticate' tool first to open a browser login window.\nDetails: {e}"
+    if READONLY:
+        auth_status += "\n🔒 Read-only mode: write tools are disabled and the webmasters.readonly scope is used."
 
     return f"""Google Search Console MCP Server
 
@@ -1637,8 +1675,8 @@ async def manage_sitemaps(site_url: str, action: str, sitemap_url: str = None, s
     try:
         # Validate inputs
         action = action.lower().strip()
-        valid_actions = ["list", "details", "submit", "delete"]
-        
+        valid_actions = ["list", "details"] if READONLY else ["list", "details", "submit", "delete"]
+
         if action not in valid_actions:
             return f"Invalid action: {action}. Please use one of: {', '.join(valid_actions)}"
         
@@ -1732,6 +1770,14 @@ async def reauthenticate() -> str:
 
     except Exception as e:
         return f"Error during reauthentication: {str(e)}"
+
+
+if READONLY:
+    for _name in WRITE_TOOLS:
+        mcp.remove_tool(_name)
+
+if AUTH_MODE == "adc":
+    mcp.remove_tool("reauthenticate")
 
 
 def main():

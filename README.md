@@ -115,7 +115,19 @@ On first use, a browser window will open asking you to sign in to your Google ac
 
 #### Option C — Short-lived, read-only credentials (no key file)
 
-Uses [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials) with service account impersonation, so tokens expire after one hour and no JSON key ever exists.
+Uses [Application Default Credentials](https://cloud.google.com/docs/authentication/application-default-credentials), so the server only ever holds one-hour access tokens and no JSON key exists.
+
+**Your own Google account** (needs access to the GSC property):
+
+1. Enable the Search Console API in a GCP project you can use for quota
+2. Log in and set the quota project:
+   ```bash
+   gcloud auth application-default login \
+     --scopes=https://www.googleapis.com/auth/webmasters.readonly,https://www.googleapis.com/auth/cloud-platform
+   gcloud auth application-default set-quota-project PROJECT_ID
+   ```
+
+**Or a shared, keyless service account** (impersonation):
 
 1. Create a service account (steps 1–3 above) but **do not create a key**
 2. Add the service account email to your GSC property with **Restricted** permission
@@ -125,7 +137,8 @@ Uses [Application Default Credentials](https://cloud.google.com/docs/authenticat
    gcloud auth application-default login \
      --impersonate-service-account=SERVICE_ACCOUNT_EMAIL
    ```
-5. Configure the server with `GSC_AUTH=adc` and `GSC_READONLY=true`:
+
+Then configure the server with `GSC_AUTH=adc` and `GSC_READONLY=true`:
    ```json
    "env": {
      "GSC_AUTH": "adc",

@@ -294,7 +294,8 @@ async def get_capabilities() -> str:
         if AUTH_MODE == "adc":
             auth_status = (
                 "❌ Not authenticated — run `gcloud auth application-default login "
-                "--impersonate-service-account=<service-account-email>` and retry."
+                f"--scopes={SCOPES[0]},https://www.googleapis.com/auth/cloud-platform` "
+                "(or add --impersonate-service-account=<email>) and retry."
                 f"\nDetails: {e}"
             )
         else:
